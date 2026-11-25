@@ -1,0 +1,103 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Linting and code formatting checks
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+      - run: |
+          npm ci
+          npm run lint
+        working-directory: frontend
+      - run: |
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets -- -D warnings
+        working-directory: backend
+
+  # Build frontend and backend
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+      - run: |
+          npm ci
+          npm run build
+        working-directory: frontend
+      - run: cargo build --release -p api
+        working-directory: backend
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-api
+          path: backend/target/release/api
+
+  # Running tests for frontend and backend
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: popravi
+          POSTGRES_PASSWORD: popravi
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U popravi"
+          --health-interval 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://popravi:popravi@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - run: |
+          npm ci
+          npx vitest run --coverage
+        working-directory: frontend
+      - run: |
+          rustup component add llvm-tools-preview
+          cargo llvm-cov --workspace --html
+        working-directory: backend
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/target/llvm-cov/html
