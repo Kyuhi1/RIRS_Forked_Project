@@ -1,6 +1,9 @@
 const TOKEN_KEY = 'popravi_token'
 const USER_KEY = 'popravi_user'
 
+// v produkciji naslov backenda (brez poševnice na koncu), v razvoju prazno (Vite proxy)
+const API_URL = import.meta.env.VITE_API_URL ?? ''
+
 export class ApiError extends Error {
   status: number
   code: string
@@ -40,7 +43,7 @@ export async function api<T>(path: string, options: { method?: string; body?: un
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   const token = session.token()
   if (token) headers.Authorization = `Bearer ${token}`
-  const res = await fetch(`/api/v1${path}`, {
+  const res = await fetch(`${API_URL}/api/v1${path}`, {
     method: options.method ?? 'GET',
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
