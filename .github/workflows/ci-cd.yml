@@ -103,3 +103,38 @@ jobs:
         with:
           name: backend-coverage
           path: backend/target/llvm-cov/html
+
+  deploy:
+    needs: [lint, build, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend-dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-api
+          path: backend-api
+      - name: Deploy frontend (Vercel)
+        run: |
+          mkdir -p .vercel/output/static
+          cp -r frontend-dist/. .vercel/output/static/
+          echo '{"version":3,"routes":[{"handle":"filesystem"},{"src":"/(.*)","dest":"/index.html"}]}' > .vercel/output/config.json
+          npx --yes vercel deploy --prebuilt --prod --token "$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Push backend image (GHCR)
+        run: |
+          chmod +x backend-api/api
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker build -f backend/Dockerfile.deploy -t ghcr.io/kyuhi1/popravi-api:latest backend-api
+          docker push ghcr.io/kyuhi1/popravi-api:latest
