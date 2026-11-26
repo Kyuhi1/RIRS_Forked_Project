@@ -138,3 +138,7 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           docker build -f backend/Dockerfile.deploy -t ghcr.io/kyuhi1/popravi-api:latest backend-api
           docker push ghcr.io/kyuhi1/popravi-api:latest
+      - name: Redeploy backend (Render)
+        run: curl -fsS -X POST "$RENDER_DEPLOY_HOOK"
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
